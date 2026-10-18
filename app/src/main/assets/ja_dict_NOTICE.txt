@@ -1,0 +1,5 @@
+ja_dict.tsv is derived from SKK-JISYO.L (https://github.com/skk-dev/dict),
+Copyright (C) 1988-2023 SKK Development Team and contributors,
+distributed under the GNU General Public License, version 2 or later.
+Converted to UTF-8, restricted to okuri-nasi entries with kana readings, annotations removed,
+at most 12 candidates per reading.

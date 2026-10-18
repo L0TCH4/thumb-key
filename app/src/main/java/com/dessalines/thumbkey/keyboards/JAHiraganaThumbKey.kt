@@ -2,6 +2,7 @@
 
 package com.dessalines.thumbkey.keyboards
 
+import com.dessalines.thumbkey.textprocessors.JapaneseTextProcessor
 import com.dessalines.thumbkey.utils.*
 import com.dessalines.thumbkey.utils.ColorVariant.*
 import com.dessalines.thumbkey.utils.FontSizeVariant.*
@@ -103,7 +104,7 @@ val KB_JA_HIRAGANA_THUMBKEY_MAIN =
                     center =
                         KeyC(
                             display = KeyDisplay.TextDisplay("゛"),
-                            action = ComposeLastKey("゛"),
+                            action = CommitText("゛"),
                             size = LARGE,
                         ),
                     swipeType = FOUR_WAY_CROSS,
@@ -215,5 +216,9 @@ val KB_JA_HIRAGANA_THUMBKEY: KeyboardDefinition =
                 main = KB_JA_HIRAGANA_THUMBKEY_MAIN,
                 shifted = KB_JA_HIRAGANA_THUMBKEY_SHIFTED,
                 numeric = NUMERIC_KEYBOARD,
+            ),
+        settings =
+            KeyboardDefinitionSettings(
+                textProcessor = JapaneseTextProcessor(),
             ),
     )
