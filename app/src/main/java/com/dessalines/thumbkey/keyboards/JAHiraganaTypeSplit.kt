@@ -2,6 +2,7 @@
 
 package com.dessalines.thumbkey.keyboards
 
+import com.dessalines.thumbkey.textprocessors.JAPANESE_TEXT_PROCESSOR
 import com.dessalines.thumbkey.utils.*
 import com.dessalines.thumbkey.utils.ColorVariant.*
 import com.dessalines.thumbkey.utils.FontSizeVariant.*
@@ -261,5 +262,9 @@ val KB_JA_HIRAGANA_TYPESPLIT: KeyboardDefinition =
                 main = KB_JA_HIRAGANA_TYPESPLIT_MAIN,
                 shifted = KB_JA_HIRAGANA_TYPESPLIT_SHIFTED,
                 numeric = TYPESPLIT_NUMERIC_KEYBOARD,
+            ),
+        settings =
+            KeyboardDefinitionSettings(
+                textProcessor = JAPANESE_TEXT_PROCESSOR,
             ),
     )

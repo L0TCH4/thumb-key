@@ -1,5 +1,7 @@
-ja_dict.tsv is derived from SKK-JISYO.L (https://github.com/skk-dev/dict),
-Copyright (C) 1988-2023 SKK Development Team and contributors,
+ja_dict.tsv and ja_dict_okuri.tsv are derived from SKK-JISYO.L and SKK-JISYO.M
+(https://github.com/skk-dev/dict), Copyright (C) 1988-2023 SKK Development Team and contributors,
 distributed under the GNU General Public License, version 2 or later.
-Converted to UTF-8, restricted to okuri-nasi entries with kana readings, annotations removed,
-at most 12 candidates per reading.
+
+Changes: converted to UTF-8, annotations removed, at most 12 (words) or 8 (stems) candidates per
+reading, each reading marked common ("*") or rare ("-"), and candidates re-ordered using word
+frequencies from the wordfreq project (https://github.com/rspeer/wordfreq, data CC BY-SA 4.0).

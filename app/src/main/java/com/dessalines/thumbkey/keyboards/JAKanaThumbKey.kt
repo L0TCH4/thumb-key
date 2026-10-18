@@ -2,6 +2,7 @@
 
 package com.dessalines.thumbkey.keyboards
 
+import com.dessalines.thumbkey.textprocessors.JAPANESE_TEXT_PROCESSOR
 import com.dessalines.thumbkey.utils.*
 import com.dessalines.thumbkey.utils.ColorVariant.*
 import com.dessalines.thumbkey.utils.FontSizeVariant.*
@@ -123,7 +124,7 @@ val KB_JA_KANA_THUMBKEY_HIRAGANA =
                     center =
                         KeyC(
                             display = KeyDisplay.TextDisplay("゛小"),
-                            action = ComposeLastKey("゛"),
+                            action = CommitText("゛"),
                             size = LARGE,
                         ),
                     swipeType = FOUR_WAY_CROSS,
@@ -252,7 +253,7 @@ val KB_JA_KANA_THUMBKEY_KATAKANA =
                     center =
                         KeyC(
                             display = KeyDisplay.TextDisplay("゛小"),
-                            action = ComposeLastKey("゛"),
+                            action = CommitText("゛"),
                             size = LARGE,
                         ),
                     swipeType = FOUR_WAY_CROSS,
@@ -274,5 +275,9 @@ val KB_JA_KANA_THUMBKEY: KeyboardDefinition =
                 main = KB_JA_KANA_THUMBKEY_HIRAGANA,
                 shifted = KB_JA_KANA_THUMBKEY_KATAKANA,
                 numeric = NUMERIC_KEYBOARD,
+            ),
+        settings =
+            KeyboardDefinitionSettings(
+                textProcessor = JAPANESE_TEXT_PROCESSOR,
             ),
     )

@@ -79,6 +79,7 @@ import com.dessalines.thumbkey.keyboards.EMOJI_BACK_KEY_ITEM
 import com.dessalines.thumbkey.keyboards.KB_EN_THUMBKEY_MAIN
 import com.dessalines.thumbkey.keyboards.NUMERIC_KEY_ITEM
 import com.dessalines.thumbkey.keyboards.RETURN_KEY_ITEM
+import com.dessalines.thumbkey.textprocessors.JapaneseTextProcessor
 import com.dessalines.thumbkey.utils.CircularDragAction
 import com.dessalines.thumbkey.utils.ColorVariant
 import com.dessalines.thumbkey.utils.KeyAction
@@ -245,6 +246,13 @@ fun KeyboardScreen(
         CircularDragAction.entries[settings?.counterclockwiseDragAction ?: DEFAULT_COUNTERCLOCKWISE_DRAG_ACTION]
     val ghostKeysEnabled = (settings?.ghostKeysEnabled ?: DEFAULT_GHOST_KEYS_ENABLED).toBool()
     val slideHoldEnabled = (settings?.slideHoldEnabled ?: DEFAULT_SLIDE_HOLD_ENABLED).toBool()
+
+    // The candidate bar belongs to the Japanese layouts that type hiragana; the katakana ones have
+    // nothing to convert.
+    val japaneseProcessor =
+        (keyboardDefinition.settings.textProcessor as? JapaneseTextProcessor)?.takeIf {
+            layout != KeyboardLayout.JAKatakanaThumbKey && layout != KeyboardLayout.JAKatakanaTypeSplit
+        }
 
     val keyBorderWidthFloat = keyBorderWidth / 10.0f
     val keyBorderColour = MaterialTheme.colorScheme.outline
@@ -955,6 +963,14 @@ fun KeyboardScreen(
                     )
                 }
                 Column(modifier = modifierPositionPadding) {
+                    if (japaneseProcessor != null) {
+                        JapaneseCandidateBar(
+                            processor = japaneseProcessor,
+                            ime = ctx,
+                            width = (keyboard.arr.maxOf { row -> row.sumOf { it.widthMultiplier } } * keyWidth).dp,
+                            keyPadding = keyPadding,
+                        )
+                    }
                     keyboard.arr.forEachIndexed { i, row ->
                         Row {
                             row.forEachIndexed { j, key ->

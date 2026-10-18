@@ -1,144 +1,68 @@
 package com.dessalines.thumbkey.textprocessors
 
-import android.content.Context
 import android.util.Log
 import android.view.KeyEvent
 import android.view.inputmethod.ExtractedTextRequest
 import android.view.inputmethod.InputConnection
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import com.dessalines.thumbkey.IMEService
 import com.dessalines.thumbkey.utils.TAG
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.TimeUnit
 
-/**
- * Kana-kanji dictionary backed by assets/ja_dict.tsv (derived from SKK-JISYO.L, GPL-2.0-or-later).
- *
- * The file is `reading<TAB>candidate<TAB>candidate...` per line, sorted by the UTF-8 bytes of the
- * reading, so lookups are a binary search over the raw bytes. No per-entry objects are created.
- */
-object JapaneseDictionary {
-    private const val ASSET = "ja_dict.tsv"
-    private const val NEWLINE = '\n'.code.toByte()
-    private const val TAB = '\t'.code.toByte()
-
-    @Volatile private var data: ByteArray? = null
-
-    @Volatile private var offsets: IntArray? = null
-
-    @Volatile private var started = false
-    private val ready = CountDownLatch(1)
-
-    /** Starts loading the dictionary on a background thread. Safe to call repeatedly. */
-    @Synchronized
-    fun warmUp(context: Context) {
-        if (started) return
-        started = true
-        val appContext = context.applicationContext
-        Thread {
-            try {
-                val bytes = appContext.assets.open(ASSET).use { it.readBytes() }
-                var count = 0
-                for (b in bytes) if (b == NEWLINE) count++
-                val lineStarts = IntArray(count)
-                var line = 0
-                var start = 0
-                for (i in bytes.indices) {
-                    if (bytes[i] == NEWLINE) {
-                        lineStarts[line++] = start
-                        start = i + 1
-                    }
-                }
-                data = bytes
-                offsets = lineStarts
-                Log.d(TAG, "Japanese dictionary loaded: $count entries")
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed to load Japanese dictionary", e)
-            } finally {
-                ready.countDown()
-            }
-        }.start()
-    }
-
-    /** Returns the candidates for an exact hiragana reading, best first. Empty if none. */
-    fun lookup(reading: String): List<String> {
-        // Normally already loaded by now; only waits if the user converts right after first typing.
-        ready.await(2, TimeUnit.SECONDS)
-        val bytes = data ?: return emptyList()
-        val lineStarts = offsets ?: return emptyList()
-        val key = reading.toByteArray(Charsets.UTF_8)
-
-        var lo = 0
-        var hi = lineStarts.size - 1
-        while (lo <= hi) {
-            val mid = (lo + hi) ushr 1
-            val cmp = compareKey(bytes, lineStarts[mid], key)
-            if (cmp < 0) {
-                lo = mid + 1
-            } else if (cmp > 0) {
-                hi = mid - 1
-            } else {
-                return readCandidates(bytes, lineStarts[mid])
-            }
-        }
-        return emptyList()
-    }
-
-    /** Compares the key of the line starting at [start] with [key]; negative if the line sorts first. */
-    private fun compareKey(
-        bytes: ByteArray,
-        start: Int,
-        key: ByteArray,
-    ): Int {
-        var i = 0
-        while (true) {
-            val lineByte = bytes[start + i]
-            val lineKeyEnded = lineByte == TAB
-            if (i == key.size) return if (lineKeyEnded) 0 else 1
-            if (lineKeyEnded) return -1
-            val a = lineByte.toInt() and 0xFF
-            val b = key[i].toInt() and 0xFF
-            if (a != b) return a - b
-            i++
-        }
-    }
-
-    private fun readCandidates(
-        bytes: ByteArray,
-        start: Int,
-    ): List<String> {
-        var end = start
-        while (bytes[end] != NEWLINE) end++
-        return String(bytes, start, end - start, Charsets.UTF_8).split('\t').drop(1)
+/** What the candidate bar shows. Replaced as a whole on every change so Compose sees it. */
+class JapaneseBarState(
+    /** True once the reading has been converted and 文節 are being chosen. */
+    val converting: Boolean,
+    /** The text of every 文節 while converting, so the focused one can be marked. */
+    val preview: List<String>,
+    val focus: Int,
+    val candidates: List<String>,
+    /** Index of the chosen candidate in [candidates], or -1 while still typing. */
+    val selected: Int,
+    /** Bumped on every update; lets the bar scroll back to the start for a new list. */
+    val version: Int,
+) {
+    companion object {
+        val EMPTY = JapaneseBarState(false, emptyList(), 0, emptyList(), -1, 0)
     }
 }
 
 /**
- * Hiragana input with kana-kanji conversion.
+ * Japanese input with kana-kanji conversion.
  *
- * Typed kana are held in Android's composing text (shown underlined). Space converts the reading
- * to the first dictionary candidate and cycles through the rest on every further press (the last
- * candidates are the plain hiragana and katakana). Enter or typing more kana confirms the current
- * candidate; backspace steps back from a candidate to the reading, then deletes reading characters.
+ * Typed hiragana are held in Android's composing text (underlined). Space converts the reading,
+ * splitting it into 文節; space again cycles the focused 文節's candidates. The candidate bar (see
+ * JapaneseCandidateBar) shows the candidates and moves between and resizes 文節. Enter, or typing
+ * more kana, confirms; backspace steps back to the reading.
  *
- * The dakuten key is routed through here as a "゛" commit (see the layout) so that it can edit the
- * reading instead of text that is already committed.
+ * Anything that is not hiragana (katakana, punctuation, digits, ...) ends the composition and is
+ * committed as typed, so the katakana layouts pass straight through.
+ *
+ * The dakuten key sends "゛" through here so it can edit the reading instead of committed text.
  */
 class JapaneseTextProcessor : TextProcessor {
-    private val reading = StringBuilder()
-    private var candidates: List<String> = emptyList()
+    private val composition = JapaneseComposition(JapaneseConverter(JapaneseDictionary))
 
-    /** -1 while the reading itself is shown, otherwise the index of the shown candidate. */
-    private var index = -1
+    /** Observed by the candidate bar. */
+    var bar by mutableStateOf(JapaneseBarState.EMPTY)
+        private set
+
+    private var barVersion = 0
 
     /** Text currently held in the composing region. */
     private var display = ""
 
     /** Cursor offset at which the composing region starts. */
     private var base = 0
+
+    /** Longest the composing text has been; late cursor updates may still describe an older, longer state. */
+    private var span = 0
     private var trackCursor = true
 
-    private val composing: Boolean
-        get() = reading.isNotEmpty()
+    fun warmUp(ime: IMEService) = JapaneseDictionary.warmUp(ime)
+
+    // ---- keyboard input ---------------------------------------------------------------------
 
     override fun handleCommitText(
         ime: IMEService,
@@ -146,22 +70,27 @@ class JapaneseTextProcessor : TextProcessor {
     ) {
         val ic = ime.currentInputConnection ?: return
         JapaneseDictionary.warmUp(ime)
+        dropIfStale(ic)
         val text = input.toString()
 
         when {
             text == DAKUTEN -> applyDakuten(ic)
 
-            text == " " && composing -> convert(ic)
+            text == " " && !composition.isEmpty -> {
+                JapaneseDictionary.awaitLoaded()
+                composition.convertOrNext()
+                render(ic)
+            }
 
-            text.length == 1 && isKana(text[0]) -> {
-                if (index >= 0) commit(ic)
-                if (!composing) syncBase(ime)
-                reading.append(text)
-                show(ic, reading.toString())
+            text.length == 1 && isHiragana(text[0]) -> {
+                if (composition.converting) commit(ic)
+                if (composition.isEmpty) syncBase(ime)
+                composition.append(text[0])
+                render(ic)
             }
 
             else -> {
-                if (composing) commit(ic)
+                if (!composition.isEmpty) commit(ic)
                 ic.commitText(text, 1)
             }
         }
@@ -172,32 +101,54 @@ class JapaneseTextProcessor : TextProcessor {
         ev: KeyEvent,
     ) {
         val ic = ime.currentInputConnection ?: return
+        dropIfStale(ic)
 
-        if (!composing) {
+        if (composition.isEmpty) {
             ic.sendKeyEvent(ev)
             return
         }
 
         when (ev.keyCode) {
             KeyEvent.KEYCODE_DEL -> {
-                if (index >= 0) {
+                if (composition.converting) {
                     // Back out of the conversion, keep the reading.
-                    index = -1
-                    show(ic, reading.toString())
+                    composition.cancelConversion()
+                    render(ic)
                 } else {
-                    reading.deleteCharAt(reading.length - 1)
-                    if (reading.isEmpty()) {
+                    composition.deleteLast()
+                    if (composition.isEmpty) {
                         ic.setComposingText("", 1)
                         ic.finishComposingText()
                         reset()
                     } else {
-                        show(ic, reading.toString())
+                        render(ic)
                     }
                 }
             }
 
             // Enter only confirms while something is being composed.
             KeyEvent.KEYCODE_ENTER -> commit(ic)
+
+            KeyEvent.KEYCODE_DPAD_LEFT,
+            KeyEvent.KEYCODE_DPAD_RIGHT,
+            KeyEvent.KEYCODE_DPAD_UP,
+            KeyEvent.KEYCODE_DPAD_DOWN,
+            -> {
+                if (composition.converting) {
+                    if (ev.action == KeyEvent.ACTION_DOWN) {
+                        when (ev.keyCode) {
+                            KeyEvent.KEYCODE_DPAD_LEFT -> composition.moveFocus(-1)
+                            KeyEvent.KEYCODE_DPAD_RIGHT -> composition.moveFocus(1)
+                            KeyEvent.KEYCODE_DPAD_UP -> composition.step(-1)
+                            else -> composition.step(1)
+                        }
+                        render(ic)
+                    }
+                } else {
+                    commit(ic)
+                    ic.sendKeyEvent(ev)
+                }
+            }
 
             else -> {
                 commit(ic)
@@ -207,7 +158,7 @@ class JapaneseTextProcessor : TextProcessor {
     }
 
     override fun handleFinishInput(ime: IMEService) {
-        if (composing) commit(ime.currentInputConnection)
+        if (!composition.isEmpty) commit(ime.currentInputConnection)
     }
 
     override fun handleCursorUpdate(
@@ -217,29 +168,75 @@ class JapaneseTextProcessor : TextProcessor {
         newSelStart: Int,
         newSelEnd: Int,
     ) {
-        if (!composing || !trackCursor) return
+        if (composition.isEmpty || !trackCursor) return
 
-        // Cursor updates arrive asynchronously, so one may describe an earlier, shorter state of the
+        // Cursor updates arrive asynchronously, so one may describe an earlier state of the
         // composing text. Anything inside the region (or at its ends) is ours; only leaving it
         // counts as the user moving the caret.
-        if (newSelStart == newSelEnd && newSelStart in base..(base + display.length)) return
+        if (newSelStart == newSelEnd && newSelStart in base..(base + span)) return
 
         Log.d(TAG, "Japanese: cursor moved to $newSelStart, committing")
         commit(ime.currentInputConnection)
     }
 
     override fun updateCursorPosition(ime: IMEService) {
-        if (!composing) syncBase(ime)
+        if (composition.isEmpty) syncBase(ime)
     }
 
-    private fun applyDakuten(ic: InputConnection) {
-        // No dakuten on a candidate; step back to the reading first.
-        if (index >= 0) return
+    // ---- candidate bar actions --------------------------------------------------------------
 
-        if (composing) {
-            val next = DAKUTEN_NEXT[reading.last()] ?: return
-            reading.setCharAt(reading.length - 1, next)
-            show(ic, reading.toString())
+    /** A candidate was tapped: choose it for the focused 文節, or commit it when still typing. */
+    fun onCandidateTapped(
+        ime: IMEService,
+        index: Int,
+    ) {
+        val ic = ime.currentInputConnection ?: return
+        dropIfStale(ic)
+        if (composition.isEmpty) return
+
+        if (composition.converting) {
+            composition.select(index)
+            if (composition.atLastSegment) {
+                commit(ic)
+            } else {
+                composition.moveFocus(1)
+                render(ic)
+            }
+        } else {
+            val text = composition.suggestions().getOrNull(index) ?: return
+            ic.commitText(text, 1)
+            reset()
+        }
+    }
+
+    fun onMoveFocus(
+        ime: IMEService,
+        delta: Int,
+    ) {
+        val ic = ime.currentInputConnection ?: return
+        composition.moveFocus(delta)
+        render(ic)
+    }
+
+    fun onResize(
+        ime: IMEService,
+        delta: Int,
+    ) {
+        val ic = ime.currentInputConnection ?: return
+        composition.resize(delta)
+        render(ic)
+    }
+
+    // ---- internals --------------------------------------------------------------------------
+
+    private fun applyDakuten(ic: InputConnection) {
+        if (composition.converting) return
+
+        if (!composition.isEmpty) {
+            val last = composition.lastChar() ?: return
+            val next = DAKUTEN_NEXT[last] ?: return
+            composition.replaceLast(next)
+            render(ic)
             return
         }
 
@@ -250,15 +247,58 @@ class JapaneseTextProcessor : TextProcessor {
         ic.commitText(next.toString(), 1)
     }
 
-    private fun convert(ic: InputConnection) {
-        if (index < 0) {
-            val r = reading.toString()
-            candidates = (JapaneseDictionary.lookup(r) + listOf(r, toKatakana(r))).distinct()
-            index = 0
-        } else {
-            index = (index + 1) % candidates.size
+    /** Shows the composition in the field and refreshes the bar. */
+    private fun render(ic: InputConnection) {
+        if (composition.isEmpty) {
+            reset()
+            return
         }
-        show(ic, candidates[index])
+        display = composition.display
+        if (display.length > span) span = display.length
+        ic.setComposingText(display, 1)
+        publishBar()
+    }
+
+    private fun publishBar() {
+        bar =
+            if (composition.isEmpty) {
+                JapaneseBarState.EMPTY
+            } else {
+                JapaneseBarState(
+                    converting = composition.converting,
+                    preview = if (composition.converting) composition.segments.map { it.text } else emptyList(),
+                    focus = composition.focus,
+                    candidates = composition.barCandidates(),
+                    selected = if (composition.converting) composition.segments[composition.focus].selected else -1,
+                    version = ++barVersion,
+                )
+            }
+    }
+
+    /** Keeps whatever is shown and ends the composition. */
+    private fun commit(ic: InputConnection?) {
+        ic?.finishComposingText()
+        reset()
+    }
+
+    private fun reset() {
+        composition.clear()
+        display = ""
+        span = 0
+        bar = JapaneseBarState.EMPTY
+    }
+
+    /**
+     * If the field no longer holds our composing text (an app cleared it after Send, say), forget
+     * the composition instead of writing the old text back.
+     */
+    private fun dropIfStale(ic: InputConnection) {
+        if (composition.isEmpty) return
+        val before = ic.getTextBeforeCursor(display.length, 0)?.toString()
+        if (before != display) {
+            Log.d(TAG, "Japanese: field changed under the composition, dropping it")
+            reset()
+        }
     }
 
     private fun syncBase(ime: IMEService) {
@@ -272,38 +312,13 @@ class JapaneseTextProcessor : TextProcessor {
         }
     }
 
-    private fun show(
-        ic: InputConnection,
-        text: String,
-    ) {
-        display = text
-        ic.setComposingText(text, 1)
-    }
-
-    /** Keeps whatever is shown and ends the composition. */
-    private fun commit(ic: InputConnection?) {
-        ic?.finishComposingText()
-        reset()
-    }
-
-    private fun reset() {
-        reading.clear()
-        candidates = emptyList()
-        index = -1
-        display = ""
-    }
-
-    private fun isKana(c: Char): Boolean = c in 'ぁ'..'ゖ' || c == 'ー'
-
-    private fun toKatakana(s: String): String =
-        s
-            .map { if (it in 'ぁ'..'ゖ') (it.code + 0x60).toChar() else it }
-            .joinToString("")
+    private fun isHiragana(c: Char): Boolean = c in 'ぁ'..'ゖ' || c == 'ー'
 
     companion object {
         private const val DAKUTEN = "゛"
 
-        // Same steps as the dakuten key in the other layouts (か → が → ゕ, つ → っ → づ, ...).
+        // Same steps as the dakuten key in the layouts before this processor
+        // (か → が → ゕ, つ → っ → づ, は → ば → ぱ, ...).
         private val DAKUTEN_FORWARD: Map<Char, Char> =
             mapOf(
                 'あ' to 'ぁ',
@@ -345,6 +360,49 @@ class JapaneseTextProcessor : TextProcessor {
                 'よ' to 'ょ',
                 'わ' to 'ゎ',
                 'ゝ' to 'ゞ',
+                'ア' to 'ァ',
+                'イ' to 'ィ',
+                'ウ' to 'ゥ',
+                'エ' to 'ェ',
+                'オ' to 'ォ',
+                'ゥ' to 'ヴ',
+                'カ' to 'ガ',
+                'キ' to 'ギ',
+                'ク' to 'グ',
+                'ケ' to 'ゲ',
+                'コ' to 'ゴ',
+                'ガ' to 'ヵ',
+                'ゲ' to 'ヶ',
+                'サ' to 'ザ',
+                'シ' to 'ジ',
+                'ス' to 'ズ',
+                'セ' to 'ゼ',
+                'ソ' to 'ゾ',
+                'タ' to 'ダ',
+                'チ' to 'ヂ',
+                'ツ' to 'ッ',
+                'テ' to 'デ',
+                'ト' to 'ド',
+                'ッ' to 'ヅ',
+                'ハ' to 'バ',
+                'ヒ' to 'ビ',
+                'フ' to 'ブ',
+                'ヘ' to 'ベ',
+                'ホ' to 'ボ',
+                'バ' to 'パ',
+                'ビ' to 'ピ',
+                'ブ' to 'プ',
+                'ベ' to 'ペ',
+                'ボ' to 'ポ',
+                'ヤ' to 'ャ',
+                'ユ' to 'ュ',
+                'ヨ' to 'ョ',
+                'ワ' to 'ヷ',
+                'ヰ' to 'ヸ',
+                'ヱ' to 'ヹ',
+                'ヲ' to 'ヺ',
+                'ヷ' to 'ヮ',
+                'ヽ' to 'ヾ',
             )
 
         // The last form of each chain wraps back to its first (ぱ → は, づ → つ, ...).
@@ -357,3 +415,6 @@ class JapaneseTextProcessor : TextProcessor {
                 }
     }
 }
+
+/** One processor shared by every Japanese layout, so a composition survives switching between them. */
+val JAPANESE_TEXT_PROCESSOR = JapaneseTextProcessor()
