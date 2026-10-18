@@ -18,6 +18,12 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v4
 
+      # Sign every build with the same debug key so a new APK can update the installed one.
+      - name: Use fixed debug keystore
+        run: |
+          mkdir -p ~/.android
+          cp debug.keystore ~/.android/debug.keystore
+
       - name: Build debug APK
         run: ./gradlew assembleDebug
 
@@ -25,4 +31,3 @@ jobs:
         with:
           name: thumbkey-debug-apk
           path: app/build/outputs/apk/debug/*.apk
-          
