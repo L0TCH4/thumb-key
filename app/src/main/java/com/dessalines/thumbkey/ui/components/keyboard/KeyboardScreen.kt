@@ -49,6 +49,7 @@ import com.dessalines.thumbkey.db.DEFAULT_CLOCKWISE_DRAG_ACTION
 import com.dessalines.thumbkey.db.DEFAULT_COUNTERCLOCKWISE_DRAG_ACTION
 import com.dessalines.thumbkey.db.DEFAULT_DRAG_RETURN_ENABLED
 import com.dessalines.thumbkey.db.DEFAULT_GHOST_KEYS_ENABLED
+import com.dessalines.thumbkey.db.DEFAULT_JAPANESE_SKK_ENABLED
 import com.dessalines.thumbkey.db.DEFAULT_HIDE_LETTERS
 import com.dessalines.thumbkey.db.DEFAULT_HIDE_SYMBOLS
 import com.dessalines.thumbkey.db.DEFAULT_IGNORE_BOTTOM_PADDING
@@ -246,6 +247,7 @@ fun KeyboardScreen(
         CircularDragAction.entries[settings?.counterclockwiseDragAction ?: DEFAULT_COUNTERCLOCKWISE_DRAG_ACTION]
     val ghostKeysEnabled = (settings?.ghostKeysEnabled ?: DEFAULT_GHOST_KEYS_ENABLED).toBool()
     val slideHoldEnabled = (settings?.slideHoldEnabled ?: DEFAULT_SLIDE_HOLD_ENABLED).toBool()
+    val japaneseSkkEnabled = (settings?.japaneseSkkEnabled ?: DEFAULT_JAPANESE_SKK_ENABLED).toBool()
 
     // The candidate bar belongs to the Japanese layouts that type hiragana; the katakana ones have
     // nothing to convert.
@@ -969,6 +971,7 @@ fun KeyboardScreen(
                             ime = ctx,
                             width = (keyboard.arr.maxOf { row -> row.sumOf { it.widthMultiplier } } * keyWidth).dp,
                             keyPadding = keyPadding,
+                            skk = japaneseSkkEnabled,
                         )
                     }
                     keyboard.arr.forEachIndexed { i, row ->

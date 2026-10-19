@@ -46,8 +46,10 @@ fun JapaneseCandidateBar(
     ime: IMEService,
     width: Dp,
     keyPadding: Int,
+    skk: Boolean,
 ) {
     LaunchedEffect(Unit) { processor.warmUp(ime) }
+    LaunchedEffect(skk) { processor.setSkk(skk) }
 
     val state = processor.bar
     val listState = rememberLazyListState()
@@ -72,6 +74,17 @@ fun JapaneseCandidateBar(
                 .background(MaterialTheme.colorScheme.surfaceVariant),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        if (state.status.isNotEmpty()) {
+            Text(
+                text = state.status,
+                color = primary,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                modifier = Modifier.padding(horizontal = 8.dp),
+            )
+        }
+
         if (state.converting) {
             Text(
                 text =

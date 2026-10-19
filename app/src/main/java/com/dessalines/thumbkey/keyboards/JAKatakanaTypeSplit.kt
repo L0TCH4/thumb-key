@@ -32,7 +32,7 @@ val KB_JA_KATAKANA_TYPESPLIT_MAIN =
                     bottom = KeyC("ト"),
                     top = KeyC("ツ"),
                 ),
-                EMOJI_KEY_ITEM_ALT,
+                JA_KANA_KEY_ITEM_ALT,
                 KeyItemC(
                     center = KeyC("ヤ", size = LARGE),
                     swipeType = FOUR_WAY_CROSS,
@@ -160,7 +160,7 @@ val KB_JA_KATAKANA_TYPESPLIT_SHIFTED =
                     bottom = KeyC("ド"),
                     top = KeyC("ヅ"),
                 ),
-                EMOJI_KEY_ITEM_ALT,
+                JA_KANA_KEY_ITEM_ALT,
                 KeyItemC(
                     center = KeyC("ャ", size = LARGE),
                     swipeType = FOUR_WAY_CROSS,

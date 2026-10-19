@@ -64,6 +64,7 @@ const val DEFAULT_CLOCKWISE_DRAG_ACTION = 0
 const val DEFAULT_COUNTERCLOCKWISE_DRAG_ACTION = 1
 const val DEFAULT_GHOST_KEYS_ENABLED = 0
 const val DEFAULT_SLIDE_HOLD_ENABLED = 0
+const val DEFAULT_JAPANESE_SKK_ENABLED = 0
 const val DEFAULT_KEY_MODIFICATIONS = ""
 const val DEFAULT_IGNORE_BOTTOM_PADDING = 0
 const val DEFAULT_SHOW_TOAST_ON_LAYOUT_SWITCH = 1
@@ -355,6 +356,11 @@ data class AppSettings(
         defaultValue = DEFAULT_SWITCH_IME_MODE.toString(),
     )
     val switchImeMode: Int = DEFAULT_SWITCH_IME_MODE,
+    @ColumnInfo(
+        name = "japanese_skk_enabled",
+        defaultValue = DEFAULT_JAPANESE_SKK_ENABLED.toString(),
+    )
+    val japaneseSkkEnabled: Int = DEFAULT_JAPANESE_SKK_ENABLED,
 )
 
 data class LayoutsUpdate(
@@ -499,6 +505,8 @@ data class BehaviorUpdate(
     val slideHoldEnabled: Int,
     @ColumnInfo(name = "switch_ime_mode")
     val switchImeMode: Int = DEFAULT_SWITCH_IME_MODE,
+    @ColumnInfo(name = "japanese_skk_enabled")
+    val japaneseSkkEnabled: Int = DEFAULT_JAPANESE_SKK_ENABLED,
 )
 
 data class KeyModificationsUpdate(
@@ -636,7 +644,7 @@ class AppSettingsRepository(
 }
 
 @Database(
-    version = 29,
+    version = 30,
     entities = [AppSettings::class],
     exportSchema = true,
 )
@@ -687,6 +695,7 @@ abstract class AppDB : RoomDatabase() {
                             MIGRATION_26_27,
                             MIGRATION_27_28,
                             MIGRATION_28_29,
+                            MIGRATION_29_30,
                         )
                         // Necessary because it can't insert data on creation
                         .addCallback(

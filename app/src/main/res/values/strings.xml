@@ -167,4 +167,6 @@
     <string name="sketch_no_matches">No candidates match</string>
     <string name="handwriting_recognition">Handwriting recognition</string>
     <string name="handwriting_recognition_summary">Sketch mode recognizes characters with glyphsketch, on the device.</string>
+    <string name="japanese_skk_enable">SKK mode (Japanese)</string>
+    <string name="japanese_skk_description">Kana key becomes the SKK shift key: shift + kana starts a reading, shift again marks okurigana</string>
 </resources>

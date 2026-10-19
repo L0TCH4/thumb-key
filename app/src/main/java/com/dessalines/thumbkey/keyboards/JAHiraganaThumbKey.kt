@@ -37,7 +37,7 @@ val KB_JA_HIRAGANA_THUMBKEY_MAIN =
                     top = KeyC("せ"),
                     right = KeyC("そ"),
                 ),
-                EMOJI_KEY_ITEM,
+                JA_KANA_KEY_ITEM,
             ),
             listOf(
                 KeyItemC(
@@ -157,7 +157,7 @@ val KB_JA_HIRAGANA_THUMBKEY_SHIFTED =
                     top = KeyC("〗"),
                     right = KeyC("〕"),
                 ),
-                EMOJI_KEY_ITEM,
+                JA_KANA_KEY_ITEM,
             ),
             listOf(
                 KeyItemC(

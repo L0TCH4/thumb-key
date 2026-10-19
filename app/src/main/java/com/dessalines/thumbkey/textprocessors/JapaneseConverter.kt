@@ -115,6 +115,27 @@ class JapaneseConverter(
         return (listOf(joined) + whole + listOf(reading, toKatakana(reading))).distinct()
     }
 
+    /** SKK-style candidates for a whole reading: dictionary words, then the kana forms. No 文節 splitting. */
+    fun skkWord(reading: String): List<String> {
+        if (reading.isEmpty()) return emptyList()
+        val words = lexicon.words(reading)?.candidates ?: emptyList()
+        if (words.isEmpty()) return candidatesFor(reading)
+        return (words + listOf(reading, toKatakana(reading))).distinct()
+    }
+
+    /** SKK okurigana lookup: stem reading + okurigana kana. Empty when the dictionary has no such entry. */
+    fun skkOkuri(
+        stem: String,
+        okuri: Char,
+    ): List<String> {
+        val letters = OKURI_LETTERS[okuri] ?: return emptyList()
+        val found = LinkedHashSet<String>()
+        for (letter in letters) {
+            lexicon.stems(stem + letter)?.candidates?.forEach { found.add(it + okuri) }
+        }
+        return found.toList()
+    }
+
     private fun candidatesOf(
         g: Group,
         reading: String,

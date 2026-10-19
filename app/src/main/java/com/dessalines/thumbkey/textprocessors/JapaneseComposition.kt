@@ -28,6 +28,13 @@ class JapaneseComposition(
     var converting = false
         private set
 
+    /** SKK style: the whole reading is one word, and an okurigana kana may follow it. */
+    var skk = false
+
+    /** SKK okurigana kana typed after the reading, waiting for conversion. */
+    var okuri: Char? = null
+        private set
+
     private var suggestionsFor = ""
     private var suggestionsCache: List<String> = emptyList()
 
@@ -37,31 +44,49 @@ class JapaneseComposition(
 
     /** What the text field should currently show. */
     val display: String
-        get() = if (converting) segmentList.joinToString("") { it.text } else reading.toString()
+        get() = if (converting) segmentList.joinToString("") { it.text } else reading.toString() + (okuri ?: "")
 
     fun append(c: Char) {
         cancelConversion()
+        okuri?.let { reading.append(it) }
+        okuri = null
         reading.append(c)
     }
 
     /** Removes the last typed character; returns false if there was nothing to remove. */
     fun deleteLast(): Boolean {
         cancelConversion()
+        if (okuri != null) {
+            okuri = null
+            return true
+        }
         if (reading.isEmpty()) return false
         reading.deleteCharAt(reading.length - 1)
         return true
     }
 
-    fun lastChar(): Char? = reading.lastOrNull()
+    fun lastChar(): Char? = okuri ?: reading.lastOrNull()
+
+    /** SKK: the next kana is the okurigana; it waits here until the user converts. */
+    fun setOkuri(c: Char) {
+        cancelConversion()
+        okuri = c
+    }
 
     fun replaceLast(c: Char) {
         cancelConversion()
-        if (reading.isNotEmpty()) reading.setCharAt(reading.length - 1, c)
+        if (okuri != null) {
+            okuri = c
+        } else if (reading.isNotEmpty()) reading.setCharAt(reading.length - 1, c)
     }
 
     /** Converts the reading, or if already converting, moves to the next candidate of the focused 文節. */
     fun convertOrNext() {
         if (reading.isEmpty()) return
+        if (skk) {
+            convertSkk()
+            return
+        }
         if (!converting) {
             segmentList.clear()
             for (b in converter.convert(reading.toString())) segmentList.add(Segment(b.reading, b.candidates))
@@ -70,6 +95,29 @@ class JapaneseComposition(
         } else {
             step(1)
         }
+    }
+
+    /** SKK conversion: the whole reading (plus okurigana, if any) is one word. */
+    fun convertSkk(): Boolean {
+        if (reading.isEmpty()) return false
+        if (converting) {
+            step(1)
+            return true
+        }
+        val cands = skkCandidates()
+        if (cands.isEmpty()) return false
+        segmentList.clear()
+        segmentList.add(Segment(reading.toString() + (okuri ?: ""), cands))
+        focus = 0
+        converting = true
+        return true
+    }
+
+    private fun skkCandidates(): List<String> {
+        val r = reading.toString()
+        val ok = okuri ?: return converter.skkWord(r)
+        val withOkuri = converter.skkOkuri(r, ok)
+        return if (withOkuri.isNotEmpty()) withOkuri else converter.skkWord(r + ok)
     }
 
     /** Cycles the focused 文節's candidate by [delta] (wraps around). */
@@ -123,6 +171,7 @@ class JapaneseComposition(
 
     fun clear() {
         reading.clear()
+        okuri = null
         segmentList.clear()
         focus = 0
         converting = false
@@ -130,11 +179,11 @@ class JapaneseComposition(
 
     /** Whole-reading candidates offered while typing. The first is the best conversion of everything. */
     fun suggestions(): List<String> {
-        val r = reading.toString()
+        val r = reading.toString() + (okuri ?: "")
         if (r.isEmpty()) return emptyList()
         if (r != suggestionsFor) {
             suggestionsFor = r
-            suggestionsCache = converter.candidatesFor(r)
+            suggestionsCache = if (skk) skkCandidates() else converter.candidatesFor(r)
         }
         return suggestionsCache
     }

@@ -22,6 +22,8 @@ class JapaneseBarState(
     val selected: Int,
     /** Bumped on every update; lets the bar scroll back to the start for a new list. */
     val version: Int,
+    /** Short mode label ("カナ", "SKK", "▽", ...), empty when there is nothing to show. */
+    val status: String = "",
 ) {
     companion object {
         val EMPTY = JapaneseBarState(false, emptyList(), 0, emptyList(), -1, 0)
@@ -60,6 +62,27 @@ class JapaneseTextProcessor : TextProcessor {
     private var span = 0
     private var trackCursor = true
 
+    /** Typing katakana instead of hiragana (toggled with the kana key's long press, or its tap without SKK). */
+    private var katakana = false
+
+    /** SKK option from the settings. */
+    private var skkMode = false
+
+    /** SKK: the next kana starts a reading (▽). */
+    private var shiftArmed = false
+
+    /** SKK: the next kana is the okurigana. */
+    private var okuriArmed = false
+
+    fun setSkk(enabled: Boolean) {
+        if (enabled == skkMode) return
+        skkMode = enabled
+        shiftArmed = false
+        okuriArmed = false
+        composition.skk = enabled
+        publishBar()
+    }
+
     fun warmUp(ime: IMEService) = JapaneseDictionary.warmUp(ime)
 
     // ---- keyboard input ---------------------------------------------------------------------
@@ -74,6 +97,10 @@ class JapaneseTextProcessor : TextProcessor {
         val text = input.toString()
 
         when {
+            text == KANA_KEY -> onKanaKey(ic, ime)
+
+            text == KANA_KEY_LONG -> toggleKatakana(ic)
+
             text == DAKUTEN -> applyDakuten(ic)
 
             text == " " && !composition.isEmpty -> {
@@ -82,16 +109,14 @@ class JapaneseTextProcessor : TextProcessor {
                 render(ic)
             }
 
-            text.length == 1 && isHiragana(text[0]) -> {
-                if (composition.converting) commit(ic)
-                if (composition.isEmpty) syncBase(ime)
-                composition.append(text[0])
-                render(ic)
-            }
+            text.length == 1 && isHiragana(text[0]) -> onKana(ic, ime, text[0])
 
             else -> {
                 if (!composition.isEmpty) commit(ic)
                 ic.commitText(text, 1)
+                shiftArmed = false
+                okuriArmed = false
+                publishBar()
             }
         }
     }
@@ -104,12 +129,18 @@ class JapaneseTextProcessor : TextProcessor {
         dropIfStale(ic)
 
         if (composition.isEmpty) {
+            if (shiftArmed && ev.keyCode == KeyEvent.KEYCODE_DEL) {
+                shiftArmed = false
+                publishBar()
+                return
+            }
             ic.sendKeyEvent(ev)
             return
         }
 
         when (ev.keyCode) {
             KeyEvent.KEYCODE_DEL -> {
+                okuriArmed = false
                 if (composition.converting) {
                     // Back out of the conversion, keep the reading.
                     composition.cancelConversion()
@@ -181,6 +212,76 @@ class JapaneseTextProcessor : TextProcessor {
 
     override fun updateCursorPosition(ime: IMEService) {
         if (composition.isEmpty) syncBase(ime)
+    }
+
+    // ---- kana key, katakana, SKK ------------------------------------------------------------
+
+    /** The kana key: shift in SKK mode, katakana switch otherwise. */
+    private fun onKanaKey(
+        ic: InputConnection,
+        ime: IMEService,
+    ) {
+        if (!skkMode) {
+            toggleKatakana(ic)
+            return
+        }
+        if (composition.converting) commit(ic)
+        if (composition.isEmpty) {
+            shiftArmed = !shiftArmed
+            publishBar()
+        } else if (composition.okuri == null) {
+            // Next kana is the okurigana.
+            okuriArmed = !okuriArmed
+            publishBar()
+        }
+    }
+
+    private fun toggleKatakana(ic: InputConnection) {
+        if (!composition.isEmpty && !skkMode) commit(ic)
+        katakana = !katakana
+        publishBar()
+    }
+
+    private fun onKana(
+        ic: InputConnection,
+        ime: IMEService,
+        c: Char,
+    ) {
+        if (!skkMode) {
+            if (katakana) {
+                if (!composition.isEmpty) commit(ic)
+                ic.commitText(JapaneseConverter.toKatakana(c.toString()), 1)
+                return
+            }
+            if (composition.converting) commit(ic)
+            if (composition.isEmpty) syncBase(ime)
+            composition.append(c)
+            render(ic)
+            return
+        }
+
+        if (composition.converting) commit(ic)
+        if (composition.isEmpty) {
+            if (shiftArmed) {
+                shiftArmed = false
+                syncBase(ime)
+                composition.skk = true
+                composition.append(c)
+                render(ic)
+            } else {
+                val out = if (katakana) JapaneseConverter.toKatakana(c.toString()) else c.toString()
+                ic.commitText(out, 1)
+            }
+            return
+        }
+
+        if (okuriArmed) {
+            okuriArmed = false
+            composition.setOkuri(c)
+        } else {
+            composition.append(c)
+        }
+        render(ic)
     }
 
     // ---- candidate bar actions --------------------------------------------------------------
@@ -259,10 +360,22 @@ class JapaneseTextProcessor : TextProcessor {
         publishBar()
     }
 
+    private fun status(): String {
+        val parts = ArrayList<String>()
+        if (skkMode) parts.add("SKK")
+        if (katakana) parts.add("カナ")
+        if (!composition.isEmpty) {
+            if (skkMode) parts.add(if (composition.okuri != null || okuriArmed) "▽*" else "▽")
+        } else if (shiftArmed) {
+            parts.add("▽")
+        }
+        return parts.joinToString(" ")
+    }
+
     private fun publishBar() {
         bar =
             if (composition.isEmpty) {
-                JapaneseBarState.EMPTY
+                JapaneseBarState(false, emptyList(), 0, emptyList(), -1, ++barVersion, status())
             } else {
                 JapaneseBarState(
                     converting = composition.converting,
@@ -271,6 +384,7 @@ class JapaneseTextProcessor : TextProcessor {
                     candidates = composition.barCandidates(),
                     selected = if (composition.converting) composition.segments[composition.focus].selected else -1,
                     version = ++barVersion,
+                    status = status(),
                 )
             }
     }
@@ -285,7 +399,8 @@ class JapaneseTextProcessor : TextProcessor {
         composition.clear()
         display = ""
         span = 0
-        bar = JapaneseBarState.EMPTY
+        okuriArmed = false
+        publishBar()
     }
 
     /**
@@ -316,6 +431,10 @@ class JapaneseTextProcessor : TextProcessor {
 
     companion object {
         private const val DAKUTEN = "゛"
+
+        /** Sent by the kana key's tap and long press; never typed into a field. */
+        const val KANA_KEY = "\uE000"
+        const val KANA_KEY_LONG = "\uE001"
 
         // Same steps as the dakuten key in the layouts before this processor
         // (か → が → ゕ, つ → っ → づ, は → ば → ぱ, ...).

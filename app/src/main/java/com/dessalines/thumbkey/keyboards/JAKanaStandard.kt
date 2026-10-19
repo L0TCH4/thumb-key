@@ -37,7 +37,7 @@ val KB_JA_KANA_STANDARD_HIRAGANA =
                     right = KeyC("せ"),
                     bottom = KeyC("そ"),
                 ),
-                EMOJI_KEY_ITEM,
+                JA_KANA_KEY_ITEM,
             ),
             listOf(
                 KeyItemC(
@@ -163,7 +163,7 @@ val KB_JA_KANA_STANDARD_KATAKANA =
                     right = KeyC("セ"),
                     bottom = KeyC("ソ"),
                 ),
-                EMOJI_KEY_ITEM,
+                JA_KANA_KEY_ITEM,
             ),
             listOf(
                 KeyItemC(

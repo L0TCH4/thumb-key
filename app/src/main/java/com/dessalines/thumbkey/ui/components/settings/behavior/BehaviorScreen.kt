@@ -47,6 +47,7 @@ import com.dessalines.thumbkey.db.DEFAULT_CLOCKWISE_DRAG_ACTION
 import com.dessalines.thumbkey.db.DEFAULT_COUNTERCLOCKWISE_DRAG_ACTION
 import com.dessalines.thumbkey.db.DEFAULT_DRAG_RETURN_ENABLED
 import com.dessalines.thumbkey.db.DEFAULT_GHOST_KEYS_ENABLED
+import com.dessalines.thumbkey.db.DEFAULT_JAPANESE_SKK_ENABLED
 import com.dessalines.thumbkey.db.DEFAULT_MIN_SWIPE_LENGTH
 import com.dessalines.thumbkey.db.DEFAULT_SLIDE_BACKSPACE_DEADZONE_ENABLED
 import com.dessalines.thumbkey.db.DEFAULT_SLIDE_CURSOR_MOVEMENT_MODE
@@ -105,6 +106,7 @@ fun BehaviorScreen(
     var counterclockwiseDragActionState =
         CircularDragAction.entries[settings?.counterclockwiseDragAction ?: DEFAULT_COUNTERCLOCKWISE_DRAG_ACTION]
     var ghostKeysEnabledState = (settings?.ghostKeysEnabled ?: DEFAULT_GHOST_KEYS_ENABLED).toBool()
+    var japaneseSkkEnabledState = (settings?.japaneseSkkEnabled ?: DEFAULT_JAPANESE_SKK_ENABLED).toBool()
     var slideHoldEnabledState = (settings?.slideHoldEnabled ?: DEFAULT_SLIDE_HOLD_ENABLED).toBool()
     var switchImeModeState = ImeSwitchMode.entries[settings?.switchImeMode ?: DEFAULT_SWITCH_IME_MODE]
 
@@ -134,6 +136,7 @@ fun BehaviorScreen(
                 ghostKeysEnabled = ghostKeysEnabledState.toInt(),
                 slideHoldEnabled = slideHoldEnabledState.toInt(),
                 switchImeMode = switchImeModeState.ordinal,
+                japaneseSkkEnabled = japaneseSkkEnabledState.toInt(),
             ),
         )
     }
@@ -459,6 +462,25 @@ fun BehaviorScreen(
                             Icon(
                                 imageVector = Icons.Outlined.BorderInner,
                                 contentDescription = stringResource(R.string.ghost_keys_enable),
+                            )
+                        },
+                    )
+                    SwitchPreference(
+                        value = japaneseSkkEnabledState,
+                        onValueChange = {
+                            japaneseSkkEnabledState = it
+                            updateBehavior()
+                        },
+                        title = {
+                            Text(stringResource(R.string.japanese_skk_enable))
+                        },
+                        summary = {
+                            Text(stringResource(R.string.japanese_skk_description))
+                        },
+                        icon = {
+                            Icon(
+                                imageVector = Icons.Outlined.Keyboard,
+                                contentDescription = stringResource(R.string.japanese_skk_enable),
                             )
                         },
                     )

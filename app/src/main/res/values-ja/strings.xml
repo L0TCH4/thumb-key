@@ -92,4 +92,6 @@
     <string name="done">完了</string>
     <string name="database_backed_up">データベースがバックアップされました。</string>
     <string name="backup_and_restore">バックアップと復元</string>
+    <string name="japanese_skk_enable">SKKモード（日本語）</string>
+    <string name="japanese_skk_description">カナキーがSKKのシフトキーになります。シフト＋かなで読み開始、読みの途中でもう一度押すと送り仮名</string>
 </resources>
