@@ -32,3 +32,35 @@ val JA_KANA_KEY_ITEM_ALT =
         left = TOGGLE_EMOJI_MODE_TRUE_KEYC,
         longPress = CommitText(JapaneseTextProcessor.KANA_KEY_LONG),
     )
+
+// ---- SKK option: the kana key becomes the shift key, the numeric key becomes the katakana key ----
+
+private val JA_SKK_SHIFT_KEYC = JA_KANA_KEYC.copy(display = KeyDisplay.TextDisplay("▽"))
+
+private val JA_KATAKANA_KEYC =
+    JA_KANA_KEYC.copy(action = CommitText(JapaneseTextProcessor.KANA_KEY_LONG))
+
+private fun skkShiftKey(item: KeyItemC): KeyItemC = item.copy(center = JA_SKK_SHIFT_KEYC)
+
+/** Katakana key; sliding it left opens the numbers. The language switch it displaces moves to the upper right. */
+private fun skkKatakanaKey(item: KeyItemC): KeyItemC =
+    item.copy(
+        center = JA_KATAKANA_KEYC,
+        left = item.center,
+        topRight = item.left ?: item.topRight,
+        longPress = null,
+    )
+
+/** The layout as it should look with the SKK option on. */
+fun KeyboardC.withSkkKeys(): KeyboardC =
+    KeyboardC(
+        arr.map { row ->
+            row.map { key ->
+                when {
+                    key === JA_KANA_KEY_ITEM || key === JA_KANA_KEY_ITEM_ALT -> skkShiftKey(key)
+                    key === NUMERIC_KEY_ITEM || key === NUMERIC_KEY_ITEM_ALT -> skkKatakanaKey(key)
+                    else -> key
+                }
+            }
+        },
+    )

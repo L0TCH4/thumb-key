@@ -80,6 +80,7 @@ import com.dessalines.thumbkey.keyboards.EMOJI_BACK_KEY_ITEM
 import com.dessalines.thumbkey.keyboards.KB_EN_THUMBKEY_MAIN
 import com.dessalines.thumbkey.keyboards.NUMERIC_KEY_ITEM
 import com.dessalines.thumbkey.keyboards.RETURN_KEY_ITEM
+import com.dessalines.thumbkey.keyboards.withSkkKeys
 import com.dessalines.thumbkey.textprocessors.JapaneseTextProcessor
 import com.dessalines.thumbkey.utils.CircularDragAction
 import com.dessalines.thumbkey.utils.ColorVariant
@@ -153,7 +154,7 @@ fun KeyboardScreen(
 
     val clipboardItems by clipboardRepository.allClipboardItems.observeAsState(initial = emptyList())
 
-    val keyboard =
+    val baseKeyboard =
         when (mode) {
             KeyboardMode.MAIN -> {
                 keyboardDefinition.modes.main
@@ -193,6 +194,15 @@ fun KeyboardScreen(
                 // Emoji and Clipboard modes use their own rendering, which does not depend on this value
                 KB_EN_THUMBKEY_MAIN
             }
+        }
+
+    val keyboard =
+        if (keyboardDefinition.settings.textProcessor is JapaneseTextProcessor &&
+            (settings?.japaneseSkkEnabled ?: DEFAULT_JAPANESE_SKK_ENABLED).toBool()
+        ) {
+            baseKeyboard.withSkkKeys()
+        } else {
+            baseKeyboard
         }
 
     val position =
